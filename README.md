@@ -27,9 +27,9 @@ print(data)
 # Output:
 # [
 #     {
-#         'code': '123456',
-#         'arrival': '2021-01-01',
-#         'departure': '2021-01-02',
+#         'code': '1234/5678',
+#         'arrival': '01/01/2025',
+#         'departure': '02/01/2025',
 #         'guest_portal_link': 'https://guestportallink,
 #     },
 #     ...
