@@ -1,4 +1,5 @@
 from . import scraper
+from .data import Fields
 from .data.Reservations import Reservations
 from .data.Errors import KrossAPIError, LoginError, ConfigurationError
 
@@ -8,6 +9,7 @@ import logging
 from dataclasses import dataclass
 from http import HTTPStatus
 import json
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -152,12 +154,21 @@ class KrossAPI:
             logger.error(f"Failed to fetch reservations ({name}): {str(e)}")
             raise
 
+    def _csv_reservations_request(self) -> requests.Response:
+        zt4b64_raw = json.dumps({"id": "reservations", "dwn": "csv"})
+        queryString = {'zt4b64': base64.b64encode(zt4b64_raw.encode()).decode()}
+        logger.debug(f"CSV Request data: {queryString}")
+        response = self.session.get(f"{self.base_url}{self.config.reservations_path}", params=queryString)
+        # logger.debug(f"CSV Response: {response.text}")
+        return response
+
     def request_reservations(
         # self, filters: Dict[str, Any] = None, columns: List[str] = ["cod_reservation"]
         self,
         filters: str = None,
         columns: List[str] = ["cod_reservation"],
         page: int = None,
+        csv: bool = False,
     ) -> requests.Response:
         """
         Make an authenticated request to get reservations data.
@@ -202,6 +213,11 @@ class KrossAPI:
 
         response = self._direct_reservations_request(zt4_data)
 
+        # at this point, we have the first page of reservations with the desired columns and filters. 
+        # csv is the chosen method to get the full data and we can return the response since we don't care about pagination
+        if csv:
+            return self._csv_reservations_request()
+
         if page:
             zt4_data_page = zt4_data.copy() | {"page": page - 1}
             response = self._direct_reservations_request(zt4_data_page)
@@ -212,9 +228,10 @@ class KrossAPI:
         self,
         # filters: Dict[str, Any] = None,
         filters: str = None,
-        fields: List[str] = ["cod_reservation"],
+        fields: List[str] = [Fields.CODE],
         page: int = 1,
         simplified: bool = False,
+        full: bool = False,
     ) -> Union[Dict, str]:
         """
         Get reservations data with optional simplification.
@@ -231,13 +248,13 @@ class KrossAPI:
             KrossAPIError: If the request fails
         """
         try:
-            response = self.request_reservations(filters, fields, page)
-            data, total = scraper.getReservationsDict(response, simplified)
+            response = self.request_reservations(filters, fields, page, csv=full)
+            data, total = scraper.getReservationsDict(response, simplified, csv=full)
             return Reservations(
                 api=self,
                 data=data,
                 pages=None,
-                current_page=page,
+                current_page=None if full else page,
                 total=total,
                 filters=filters,
                 fields=fields,

@@ -67,7 +67,7 @@ class Reservations:
         """
         Return reservations data in JSON format
         """
-        return json.dumps(self.data)
+        return json.dumps(self.data, indent=2)
 
     def next(self):
         """

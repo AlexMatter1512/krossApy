@@ -1,9 +1,11 @@
-import json
 from bs4 import BeautifulSoup
 import logging
 
+#csv parsing
+import csv
+
 logger = logging.getLogger(__name__)
-def getReservationsDict(response, simplified=False):
+def getReservationsDict(response, simplified=False, csv=False) -> tuple[dict, int]:
     """Get reservations data from HTML response.
     
     Args:
@@ -15,6 +17,44 @@ def getReservationsDict(response, simplified=False):
         
     Raises:
         ValueError: If reservations table is not found
+    """
+    if csv:
+        return scrapeCsv(response, simplified)
+    return scrapeHtml(response, simplified)
+    
+def scrapeCsv(csv_response, simplified=False) -> tuple[dict, int]:
+    """Scrape CSV response for reservations data.
+    
+    Args:
+        csv: CSV response
+        
+    Returns:
+        dict: Reservations data
+    """
+    reader = csv.DictReader(csv_response.text.splitlines())
+    headers = reader.fieldnames
+    
+    if simplified:
+        headers = reader.fieldnames
+        data = []
+        values = []
+        for row in reader:
+            values.append([v.strip() for v in row.values()])
+        total = len(values)
+        return {"headers": headers, "data": values}, total
+    else:
+        data = [{k: v.strip() for k, v in row.items()} for row in reader]
+        return data, len(data)
+
+    
+def scrapeHtml(response, simplified=False) -> tuple[dict, int]:
+    """Scrape HTML response for reservations data.
+    
+    Args:
+        response: HTTP response containing HTML
+        
+    Returns:
+        dict: Reservations data
     """
     soup = BeautifulSoup(response.text, "html.parser")
 
