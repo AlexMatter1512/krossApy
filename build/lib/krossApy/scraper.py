@@ -17,14 +17,6 @@ def getReservationsDict(response, simplified=False):
         ValueError: If reservations table is not found
     """
     soup = BeautifulSoup(response.text, "html.parser")
-
-    # try to find the span with class "t" 
-    total = soup.find("span", class_="t")
-    if total is None:
-        logger.error("No total reservations found in response")
-    else:
-        total = int(total.text.strip())
-
     table = soup.find("table", id="reservations")
     
     if table is None:
@@ -65,4 +57,4 @@ def getReservationsDict(response, simplified=False):
             row_data = dict(zip(headers, cells))
         data.append(row_data)
     
-    return {"headers": headers, "data": data} if simplified else data, total
+    return {"headers": headers, "data": data} if simplified else data

@@ -1,16 +1,15 @@
 from . import scraper
-from .data.Reservations import Reservations
 from .data.Errors import KrossAPIError, LoginError, ConfigurationError
 
 from typing import Dict, List, Optional, Union, Any
 import requests
 import logging
+import urllib.parse
 from dataclasses import dataclass
 from http import HTTPStatus
 import json
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class KrossConfig:
@@ -19,7 +18,6 @@ class KrossConfig:
     base_url_template: str = "https://{}.krossbooking.com"
     login_path: str = "/login/v2"
     reservations_path: str = "/v2/reservations?lang=en"
-
 
 class KrossAPI:
     def __init__(
@@ -113,51 +111,26 @@ class KrossAPI:
         if not self.logged_in:
             raise LoginError("You must login before making requests")
 
-    def _direct_reservations_request(
-        self, zt4_data: Dict[str, Any], name: str = ""
-    ) -> requests.Response:
+    @staticmethod
+    def build_filter_string(filters: Dict[str, Any]) -> str:
         """
-        Make a direct request to get reservations data.
+        Convert a dictionary of filters to a URL-encoded string.
 
         Args:
-            zt4_data: The data to send in the request
+            filters: Dictionary of filter parameters
 
         Returns:
-            Response from the server containing reservation data
-
-        Raises:
-            LoginError: If not logged in
-            requests.RequestException: If the request fails
+            URL-encoded filter string
         """
-        self._check_authentication()
-        reservation_url = f"{self.base_url}{self.config.reservations_path}?"
-
-        json_str = json.dumps(zt4_data)
-
         try:
-            data = {"zt4_data": json_str}
-            logger.debug(f"{name} Request data: {data}")
-
-            request = requests.Request("POST", reservation_url, data=data)
-            prepared_request = self.session.prepare_request(request)
-            logger.debug(f"{name} Direct Request Body: %s", prepared_request.body)
-
-            response = self.session.send(prepared_request)
-
-            response.raise_for_status()
-            return response
-
-        except requests.RequestException as e:
-            # logger.error("Failed to fetch reservations: %s", str(e))
-            logger.error(f"Failed to fetch reservations ({name}): {str(e)}")
-            raise
+            encoded_filters = urllib.parse.urlencode(filters)
+            logger.debug("Encoded filters: %s", encoded_filters)
+            return encoded_filters
+        except Exception as e:
+            raise ValueError(f"Invalid filter format: {str(e)}") from e
 
     def request_reservations(
-        # self, filters: Dict[str, Any] = None, columns: List[str] = ["cod_reservation"]
-        self,
-        filters: str = None,
-        columns: List[str] = ["cod_reservation"],
-        page: int = None,
+        self, filters: Dict[str, Any] = None, columns: List[str] = ["cod_reservation"]
     ) -> requests.Response:
         """
         Make an authenticated request to get reservations data.
@@ -173,47 +146,48 @@ class KrossAPI:
             LoginError: If not logged in
             requests.RequestException: If the request fails
         """
-
-        base_zt4_data = {
-            "id": "reservations",
-            "sort": ",arrival asc,",
-            "text": "",
-            "refresh_ajax": True,
-        }
+        self._check_authentication()
 
         if "cod_reservation" in columns:
             columns.remove("cod_reservation")
         columns.insert(0, "cod_reservation")
 
-        # reset request to start from scratch
-        reset_zt4_data = base_zt4_data.copy() | {"reset": True}
-        self._direct_reservations_request(reset_zt4_data, "Reset")
+        reservation_url = f"{self.base_url}{self.config.reservations_path}?"
 
-        # remove base filters
-        remove_filters_zt4_data = base_zt4_data.copy() | {"filters_remove": 0}
-        self._direct_reservations_request(remove_filters_zt4_data, "Remove Filters")
+        zt4_data = {
+            "id": "reservations",
+            "sort": ",arrival asc,",
+            "text": "",
+            "refresh_ajax": True,
+            "columns": columns,
+        }
+        if filters:
+            filter_string = self.build_filter_string(filters)
+            zt4_data["filters"] = filter_string
 
-        # actual request
-        zt4_data = (
-            base_zt4_data.copy()
-            | {"columns": columns}
-            | ({"filters": filters} if filters else {})
-        )
+        json_str = json.dumps(zt4_data)
 
-        response = self._direct_reservations_request(zt4_data)
+        try:
+            data = {"zt4_data": json_str}
+            logger.debug("Request data: %s", data)
 
-        if page:
-            zt4_data_page = zt4_data.copy() | {"page": page - 1}
-            response = self._direct_reservations_request(zt4_data_page)
+            request = requests.Request("POST", reservation_url, data=data)
+            prepared_request = self.session.prepare_request(request)
+            logger.debug("Request Body: %s", prepared_request.body)
 
-        return response
+            response = self.session.send(prepared_request)
+
+            response.raise_for_status()
+            return response
+
+        except requests.RequestException as e:
+            logger.error("Failed to fetch reservations: %s", str(e))
+            raise
 
     def get_reservations(
         self,
-        # filters: Dict[str, Any] = None,
-        filters: str = None,
+        filters: Dict[str, Any] = None,
         fields: List[str] = ["cod_reservation"],
-        page: int = 1,
         simplified: bool = False,
     ) -> Union[Dict, str]:
         """
@@ -231,17 +205,8 @@ class KrossAPI:
             KrossAPIError: If the request fails
         """
         try:
-            response = self.request_reservations(filters, fields, page)
-            data, total = scraper.getReservationsDict(response, simplified)
-            return Reservations(
-                api=self,
-                data=data,
-                pages=None,
-                current_page=page,
-                total=total,
-                filters=filters,
-                fields=fields,
-            )
+            response = self.request_reservations(filters, fields)
+            return scraper.getReservationsDict(response, simplified)
         except Exception as e:
             logger.debug("response: %s", response.text)
             raise KrossAPIError(
