@@ -124,6 +124,8 @@ print(json.dumps(reservations.simple_data, indent=4))
     ]
 }
 ```
+</details>
+
 ## Installation
 
 ```bash
