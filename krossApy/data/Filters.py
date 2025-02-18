@@ -1,15 +1,8 @@
-#"filters":"zt4_cond[arrival]=mau&arrival=15/02/2025"
-
-# filters = {
-#     f"zt4_cond[{Fields.ARRIVAL}]": "mau",
-#     Fields.ARRIVAL: "15/02/2025",
-# }
-
-# how_filters_should_look = build_filters( field = Fields.ARRIVAL, condition = ">=", value = "15/02/2025" )
-
+from typing import List
+from . import Fields, _Field_Idx, Errors
 BASE_FILTER = "zt4_cond[{}]={}&{}={}"
 
-def build_filters(field: str, condition: str, value: str) -> str:
+def build_filters(field: Fields, condition: str, value: str) -> str:
     """
     Build a filter string for the API request
     
@@ -21,8 +14,12 @@ def build_filters(field: str, condition: str, value: str) -> str:
     Returns:
         str: The filter string
     """
+    try:
+        actual_field = field.value[_Field_Idx.FILTER]
+    except IndexError:
+        raise Errors.UnsupportedFilterField(field)
     operator = get_operator_string(condition)
-    return BASE_FILTER.format(field, operator, field, value)
+    return BASE_FILTER.format(actual_field, operator, actual_field, value)
 
 # Mapping of comparison operators to their string representations
 OPERATOR_MAP = {
@@ -31,7 +28,8 @@ OPERATOR_MAP = {
     '<=': 'miu',
     '>=': 'mau',
     '=': 'e',
-    '==': 'e'
+    '==': 'e',
+    '!=': 'd'
 }
 
 def get_operator_string(operator: str) -> str:

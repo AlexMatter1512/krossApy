@@ -73,7 +73,8 @@ class Reservations:
         """
         Move to the next page of reservations
         """
-        self.page(self.current_page + 1)
+        if self.current_page:
+            self.page(self.current_page + 1)
 
     def __str__(self):  # this can be used like: print(reservations)
         """

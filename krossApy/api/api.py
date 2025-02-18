@@ -1,7 +1,10 @@
-from . import scraper
-from .data import Fields
-from .data.Reservations import Reservations
-from .data.Errors import KrossAPIError, LoginError, ConfigurationError
+from .custom_fields_handlers import CUSTOM_FIELDS_HANDLERS
+from .custom_types_handlers import retype_fields
+
+from ..scraper import scraper
+from ..data import Fields, _Field_Idx, CustomFields
+from ..data.Reservations import Reservations
+from ..data.Errors import KrossAPIError, LoginError, ConfigurationError
 
 from typing import Dict, List, Optional, Union, Any
 import requests
@@ -13,6 +16,22 @@ import base64
 
 logger = logging.getLogger(__name__)
 
+BASE_FIELDS = [
+    Fields.CODE,
+    Fields.LABEL,
+    Fields.NIGHTS,
+    Fields.ARRIVAL,
+    Fields.DEPARTURE,
+    Fields.N_ROOMS,
+    Fields.ROOMS,
+    Fields.N_BEDS,
+    Fields.DATE_RESERVATION,
+    Fields.LAST_UPDATE,
+    Fields.CHANNEL,
+    Fields.STATUS,
+    Fields.TELEPHONE,
+    Fields.GUEST_PORTAL_LINK,
+]
 
 @dataclass
 class KrossConfig:
@@ -114,7 +133,7 @@ class KrossAPI:
         """Check if the client is authenticated."""
         if not self.logged_in:
             raise LoginError("You must login before making requests")
-
+        
     def _direct_reservations_request(
         self, zt4_data: Dict[str, Any], name: str = ""
     ) -> requests.Response:
@@ -226,12 +245,11 @@ class KrossAPI:
 
     def get_reservations(
         self,
-        # filters: Dict[str, Any] = None,
         filters: str = None,
-        fields: List[str] = [Fields.CODE],
+        fields: List[List[str]] = BASE_FIELDS,
         page: int = 1,
         simplified: bool = False,
-        full: bool = False,
+        full: bool = True,
     ) -> Union[Dict, str]:
         """
         Get reservations data with optional simplification.
@@ -247,10 +265,25 @@ class KrossAPI:
         Raises:
             KrossAPIError: If the request fails
         """
+        # Split fields into custom and standard fields using set operations
+        field_set = set(fields)
+        logger.debug("Field set: %s", field_set)
+
+        custom_field_values = {field.value for field in CustomFields}
+        logger.debug("Custom field values: %s", custom_field_values)
+
+        custom_fields = field_set.intersection(custom_field_values)
+        logger.debug("Custom fields: %s", custom_fields)
+
+        standard_fields = field_set - custom_fields
+
+        # Map standard fields to their request values
+        request_fields = [field.value[_Field_Idx.REQUEST] for field in standard_fields]
+
         try:
-            response = self.request_reservations(filters, fields, page, csv=full)
+            response = self.request_reservations(filters, request_fields, page, csv=full)
             data, total = scraper.getReservationsDict(response, simplified, csv=full)
-            return Reservations(
+            reservations = Reservations(
                 api=self,
                 data=data,
                 pages=None,
@@ -259,6 +292,20 @@ class KrossAPI:
                 filters=filters,
                 fields=fields,
             )
+            if custom_fields:
+                logger.debug("Applying custom fields handlers")
+                for field in custom_fields:
+                    # get the handler for the custom field
+                    handler = CUSTOM_FIELDS_HANDLERS.get(field)
+                    logger.debug("Handler for %s: %s", field, handler)
+                    if handler:
+                        # apply the handler to the reservations
+                        reservations = handler(reservations)
+
+            reservations = retype_fields(reservations)
+
+            return reservations
+
         except Exception as e:
             logger.debug("response: %s", response.text)
             raise KrossAPIError(

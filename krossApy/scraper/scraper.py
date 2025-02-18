@@ -96,7 +96,7 @@ def scrapeHtml(response, simplified=False) -> tuple[dict, int]:
 
         # the first cell is the code, if it is empty, skip the row
         if not cells[0]:
-            logger.info("Skipping row with empty code")
+            logger.debug("Skipping row with empty code")
             continue
         
         if simplified:
