@@ -1,25 +1,5 @@
 from typing import List
 from . import Fields, _Field_Idx, Errors
-BASE_FILTER = "zt4_cond[{}]={}&{}={}"
-
-def build_filters(field: Fields, condition: str, value: str) -> str:
-    """
-    Build a filter string for the API request
-    
-    Args:
-        field (str): The field to filter on
-        condition (str): The comparison operator
-        value (str): The value to compare against
-        
-    Returns:
-        str: The filter string
-    """
-    try:
-        actual_field = field.value[_Field_Idx.FILTER]
-    except IndexError:
-        raise Errors.UnsupportedFilterField(field)
-    operator = get_operator_string(condition)
-    return BASE_FILTER.format(actual_field, operator, actual_field, value)
 
 # Mapping of comparison operators to their string representations
 OPERATOR_MAP = {

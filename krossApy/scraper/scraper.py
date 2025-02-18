@@ -19,10 +19,10 @@ def getReservationsDict(response, simplified=False, csv=False) -> tuple[dict, in
         ValueError: If reservations table is not found
     """
     if csv:
-        return scrapeCsv(response, simplified)
-    return scrapeHtml(response, simplified)
+        return scrapeCsv(response)
+    return scrapeHtml(response)
     
-def scrapeCsv(csv_response, simplified=False) -> tuple[dict, int]:
+def scrapeCsv(csv_response) -> tuple[dict, int]:
     """Scrape CSV response for reservations data.
     
     Args:
@@ -34,20 +34,11 @@ def scrapeCsv(csv_response, simplified=False) -> tuple[dict, int]:
     reader = csv.DictReader(csv_response.text.splitlines())
     headers = reader.fieldnames
     
-    if simplified:
-        headers = reader.fieldnames
-        data = []
-        values = []
-        for row in reader:
-            values.append([v.strip() for v in row.values()])
-        total = len(values)
-        return {"headers": headers, "data": values}, total
-    else:
-        data = [{k: v.strip() for k, v in row.items()} for row in reader]
-        return data, len(data)
+    data = [{k: v.strip() for k, v in row.items()} for row in reader]
+    return data, len(data)
 
     
-def scrapeHtml(response, simplified=False) -> tuple[dict, int]:
+def scrapeHtml(response) -> tuple[dict, int]:
     """Scrape HTML response for reservations data.
     
     Args:
@@ -99,10 +90,7 @@ def scrapeHtml(response, simplified=False) -> tuple[dict, int]:
             logger.debug("Skipping row with empty code")
             continue
         
-        if simplified:
-            row_data = cells
-        else:
-            row_data = dict(zip(headers, cells))
+        row_data = dict(zip(headers, cells))
         data.append(row_data)
     
-    return {"headers": headers, "data": data} if simplified else data, total
+    return data, total

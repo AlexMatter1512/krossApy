@@ -30,7 +30,7 @@ class Fields(Enum):
     CHANNEL = ["channel", "Channel"]
     DATE_EXPIRATION = ["date_expiration", "Reservation Date"]
     DATE_CANCELATION = ["date_cancelation", "Cancelation date"]
-    STATUS = ["cod_reservation_status", "Status"]
+    STATUS = ["name_reservation_status", "Status", "cod_reservation_status"]
     TOTAL_CHARGE = ["tot_charge", "Charges"]
     ID_CONVENZIONE = ["id_convenzione", "Convenzione"]
     ID_PACKAGE = ["id_package", "Pacchetto"]

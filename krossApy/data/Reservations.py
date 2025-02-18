@@ -99,3 +99,10 @@ class Reservations:
             },
             indent=2,
         )
+
+    @property
+    def simple_data(self):
+        # turn a [{key: value, key: value, ...}, ...] list into a {keys: [key, key, ...], values: [[value, value, ...], ...]} dict
+        headers = list(self.data[0].keys())
+        data = [[row[header] for header in headers] for row in self.data]
+        return {"keys": headers, "values": data}

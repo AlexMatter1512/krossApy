@@ -115,11 +115,15 @@ class KrossAPI:
             # Step 2: Actual Login
             payload = {"username": username, "password": password}
             response = self.session.post(login_url, data=payload)
+            logger.debug("Login response: %s", response.text)
 
             if response.status_code != HTTPStatus.OK:
                 raise LoginError(
                     f"Login failed with status code: {response.status_code}"
                 )
+
+            if err := response.json().get("login_error"):
+                raise LoginError("Login failed: " + err)
 
             self.logged_in = True
             logger.debug(
@@ -184,7 +188,7 @@ class KrossAPI:
     def request_reservations(
         # self, filters: Dict[str, Any] = None, columns: List[str] = ["cod_reservation"]
         self,
-        filters: str = None,
+        filters: List[str] = None,
         columns: List[str] = ["cod_reservation"],
         page: int = None,
         csv: bool = False,
@@ -223,11 +227,15 @@ class KrossAPI:
         remove_filters_zt4_data = base_zt4_data.copy() | {"filters_remove": 0}
         self._direct_reservations_request(remove_filters_zt4_data, "Remove Filters")
 
+        for filter in filters or []:
+            filter_zt4_data = base_zt4_data.copy() | {"filters": filter}
+            self._direct_reservations_request(filter_zt4_data, "Filter")
+
         # actual request
         zt4_data = (
             base_zt4_data.copy()
             | {"columns": columns}
-            | ({"filters": filters} if filters else {})
+            # | ({"filters": filters} if filters else {})
         )
 
         response = self._direct_reservations_request(zt4_data)
@@ -245,12 +253,11 @@ class KrossAPI:
 
     def get_reservations(
         self,
-        filters: str = None,
-        fields: List[List[str]] = BASE_FIELDS,
+        filters: List[str] = None,
+        fields: List[Fields] = BASE_FIELDS,
         page: int = 1,
-        simplified: bool = False,
         full: bool = True,
-    ) -> Union[Dict, str]:
+    ) -> Reservations:
         """
         Get reservations data with optional simplification.
 
@@ -282,7 +289,7 @@ class KrossAPI:
 
         try:
             response = self.request_reservations(filters, request_fields, page, csv=full)
-            data, total = scraper.getReservationsDict(response, simplified, csv=full)
+            data, total = scraper.getReservationsDict(response, csv=full)
             reservations = Reservations(
                 api=self,
                 data=data,
@@ -307,6 +314,7 @@ class KrossAPI:
             return reservations
 
         except Exception as e:
+            logger.error("Failed to get reservations: %s", str(e))
             logger.debug("response: %s", response.text)
             raise KrossAPIError(
                 f"Failed to get reservations (see debug log): {str(e)}"

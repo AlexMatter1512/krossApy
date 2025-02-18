@@ -1,2 +1,2 @@
-from .api import KrossAPI
-from .data import Reservations, Fields, build_filters
+from .api import KrossAPI, build_filter
+from .data import Reservations, Fields
