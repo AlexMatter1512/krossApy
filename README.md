@@ -18,7 +18,7 @@ with KrossAPI("hotel_id") as api:
 
 print(reservations)
 ```
-### Output
+#### Output
 Note: Default fields are used when none are specified. See [Filtering Reservations Fields](#filtering-reservations-fields).
 ```json
 [
@@ -37,7 +37,6 @@ Note: Default fields are used when none are specified. See [Filtering Reservatio
     
 </details>
 
----
 ### Filtering Reservations
 <details>
     <summary>toggle example</summary>
@@ -61,7 +60,6 @@ print(reservations)
     
 </details>
 
---- 
 ### Filtering Reservations Fields
 <details>
     <summary>toggle example</summary>
@@ -81,7 +79,7 @@ with KrossAPI("hotel_id") as api:
 
 print(reservations)
 ```
-### Output
+#### Output
 ```json
 [
     {
@@ -94,7 +92,38 @@ print(reservations)
     
 </details>
 
----
+### Reduced Output
+To avoid repeating the field names in the output, you can use the `simple_data` attribute.
+`simple_data` is a dict with two keys: `keys` and `data`. `keys` contains the field names and `data` contains the values.
+<details>
+    <summary>toggle example</summary>
+
+```python
+from krossApy import KrossAPI, Fields, build_filter, Reservations
+import json
+with KrossAPI("hotel_id") as api:
+    api.login("username", "password")
+
+    reservations: Reservations = api.get_reservations(
+        fields = [
+            Fields.CODE,
+            Fields.TELEPHONE,
+        ]
+    )
+
+print(json.dumps(reservations.simple_data, indent=4))
+```
+#### Output
+```json
+{
+    "keys": ["code", "telephone"],
+    "data": [
+        ["1234/5678", "1234567890"],
+        ["5678/1234", "0987654321"],
+        ...
+    ]
+}
+```
 ## Installation
 
 ```bash
