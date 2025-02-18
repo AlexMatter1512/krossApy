@@ -94,7 +94,7 @@ print(reservations)
 
 ### Reduced Output
 To avoid repeating the field names in the output, you can use the `simple_data` attribute.
-`simple_data` is a dict with two keys: `keys` and `data`. `keys` contains the field names and `data` contains the values.
+`simple_data` is a dict with two keys: `keys` and `values`. `keys` contains the field names and `values` contains the values.
 <details>
     <summary>toggle example</summary>
 
@@ -117,7 +117,7 @@ print(json.dumps(reservations.simple_data, indent=4))
 ```json
 {
     "keys": ["code", "telephone"],
-    "data": [
+    "values": [
         ["1234/5678", "1234567890"],
         ["5678/1234", "0987654321"],
         ...
@@ -125,6 +125,9 @@ print(json.dumps(reservations.simple_data, indent=4))
 }
 ```
 </details>
+
+---
+Further examples will be added in the future.
 
 ## Installation
 
