@@ -2,37 +2,24 @@
 
 Unofficial [KrossBooking](https://www.krossbooking.com/) API in Python. Requests are based on the official web interface (V2), data is extracted via static web scraping enabling easy programmatic access to it.
 
----
+## Usage Examples
+### Basic Setup
+Note: This example is provided for demonstration purposes only. It retrieves every reservation without applying any filters, which may result in long fetch times. It is recommended to use appropriate filtering parameters to limit the dataset. See [Filtering Reservations](#filtering-reservations).
 
-## Example Usage
+<details>
+<summary>toggle example</summary>
 
 ```python
-from krossApy import KrossAPI, Fields, build_filters, Reservations
-from datetime import datetime
+from krossApy import KrossAPI
 
 with KrossAPI("hotel_id") as api:
-
     api.login("username", "password")
-
-    today = datetime.now().strftime("%d/%m/%Y")
-    filters = build_filters(field=Fields.ARRIVAL, condition=">=", value=today)
-
-    reservations: Reservations = api.get_reservations(
-        fields = [
-            Fields.CODE,
-            Fields.CHANNEL,
-            Fields.ARRIVAL,
-            Fields.DEPARTURE,
-            Fields.GUEST_PORTAL_LINK,
-            Fields.EMAIL,
-            Fields.TELEPHONE,
-        ],
-        filters = filters,
-    )
+    reservations = api.get_reservations()
 
 print(reservations)
 ```
 ### Output
+Note: Default fields are used when none are specified. See [Filtering Reservations Fields](#filtering-reservations-fields).
 ```json
 [
     {
@@ -47,8 +34,68 @@ print(reservations)
     ...
 ]
 ```
+    
+</details>
+
+---
+### Filtering Reservations
+<details>
+    <summary>toggle example</summary>
+
+```python
+from krossApy import KrossAPI, Fields, build_filter, Reservations
+from datetime import datetime
+
+with KrossAPI("hotel_id") as api:
+
+    api.login("username", "password")
+
+    today = datetime.now().strftime("%d/%m/%Y")
+    filter = build_filter(field=Fields.ARRIVAL, condition=">=", value=today)
+    filters = [filter]
+
+    reservations: Reservations = api.get_reservations(filters = filters)
+
+print(reservations)
+```
+    
+</details>
+
+--- 
+### Filtering Reservations Fields
+<details>
+    <summary>toggle example</summary>
+
+```python
+from krossApy import KrossAPI, Fields, build_filter, Reservations
+
+with KrossAPI("hotel_id") as api:
+    api.login("username", "password")
+
+    reservations: Reservations = api.get_reservations(
+        fields = [
+            Fields.CODE,
+            Fields.TELEPHONE,
+        ]
+    )
+
+print(reservations)
+```
+### Output
+```json
+[
+    {
+        "code": "1234/5678",
+        "telephone": "1234567890"
+    },
+    ...
+]
+```
+    
+</details>
+
+---
 ## Installation
-currently not published on PyPi, but soon you can install it via pip:
 
 ```bash
 pip install krossApy
