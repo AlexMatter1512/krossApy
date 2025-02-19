@@ -5,16 +5,13 @@ with open('README.md', 'r') as file:
 
 setup(
     name='krossApy',
-    version='0.0.4',
-    description='Unofficial Python API for KrossBooking',
+    version='0.0.5',
+    description='Unofficial API for KrossBooking',
     long_description=long_description,
     long_description_content_type='text/markdown',
     install_requires=[
         'requests',
         'beautifulsoup4',
     ],
-    # ext_package='krossApy',
-    # packages=find_packages(where="krossApy"),
     package_dir={"krossApy": "krossApy"},
-    # packages=find_packages(where="krossApy"),
 )
