@@ -24,13 +24,15 @@ class Fields(Enum):
     ROOMS = ["rooms", "Rooms"]
     OWNER = ["owner", "Owner"]
     GUEST_PORTAL_LINK = ["guest_portal", "Guest Portal"]
-    N_BEDS = ["n_beds", "Guests"]
+    # N_BEDS = ["n_beds", "Guests"] renamed by krossbooking
+    N_BEDS = ["n_beds", "Guest"]
     DATE_RESERVATION = ["date_reservation", "Reservation Date"]
     LAST_UPDATE = ["last_update", "Last operation"]
     CHANNEL = ["channel", "Channel"]
     DATE_EXPIRATION = ["date_expiration", "Reservation Date"]
     DATE_CANCELATION = ["date_cancelation", "Cancelation date"]
-    STATUS = ["name_reservation_status", "Status", "cod_reservation_status"]
+    # STATUS = ["name_reservation_status", "Status", "cod_reservation_status"] renamed by krossbooking
+    STATUS = ["name_reservation_status", "State", "cod_reservation_status"]
     TOTAL_CHARGE = ["tot_charge", "Charges"]
     ID_CONVENZIONE = ["id_convenzione", "Convenzione"]
     ID_PACKAGE = ["id_package", "Pacchetto"]
