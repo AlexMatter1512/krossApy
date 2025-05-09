@@ -1,2 +1,2 @@
-from .Fields import Fields, _Field_Idx, CustomFields
+from .Fields import Fields, CustomFields, Field
 from .Reservations import Reservations

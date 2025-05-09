@@ -5,7 +5,7 @@ import logging
 import csv
 
 logger = logging.getLogger(__name__)
-def getReservationsDict(response, simplified=False, csv=False) -> tuple[dict, int]:
+def getReservationsTuple(response, simplified=False, csv=False) -> tuple[dict, int]:
     """Get reservations data from HTML response.
     
     Args:
@@ -13,7 +13,7 @@ def getReservationsDict(response, simplified=False, csv=False) -> tuple[dict, in
         simplified (bool): If True, returns headers and data separately
             
     Returns:
-        dict: Either {"headers": [...], "data": [...]} or list of header-value dictionaries
+        tuple: Reservations data and total number of reservations
         
     Raises:
         ValueError: If reservations table is not found

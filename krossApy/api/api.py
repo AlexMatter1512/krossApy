@@ -1,8 +1,9 @@
+from krossApy.data.Reservation import Reservation
 from .custom_fields_handlers import CUSTOM_FIELDS_HANDLERS
 from .custom_types_handlers import retype_fields
 
 from ..scraper import scraper
-from ..data import Fields, _Field_Idx, CustomFields
+from ..data import Fields, CustomFields, Field
 from ..data.Reservations import Reservations
 from ..data.Errors import KrossAPIError, LoginError, ConfigurationError
 
@@ -254,7 +255,7 @@ class KrossAPI:
     def get_reservations(
         self,
         filters: List[str] = None,
-        fields: List[Fields] = BASE_FIELDS,
+        fields: List[Field] = BASE_FIELDS,
         page: int = 1,
         full: bool = True,
     ) -> Reservations:
@@ -276,20 +277,23 @@ class KrossAPI:
         field_set = set(fields)
         logger.debug("Field set: %s", field_set)
 
-        custom_field_values = {field.value for field in CustomFields}
-        logger.debug("Custom field values: %s", custom_field_values)
+        all_custom_field_values = {field.value for field in CustomFields}
+        logger.debug("Custom field values: %s", all_custom_field_values)
 
-        custom_fields = field_set.intersection(custom_field_values)
+        custom_fields = field_set.intersection(all_custom_field_values)
         logger.debug("Custom fields: %s", custom_fields)
 
         standard_fields = field_set - custom_fields
 
         # Map standard fields to their request values
-        request_fields = [field.value[_Field_Idx.REQUEST] for field in standard_fields]
+        # request_fields = [field.value[_Field_Idx.REQUEST] for field in standard_fields]
+        request_fields = [field.REQUEST for field in standard_fields]
 
         try:
             response = self.request_reservations(filters, request_fields, page, csv=full)
-            data, total = scraper.getReservationsDict(response, csv=full)
+            data_tuple, total = scraper.getReservationsTuple(response, csv=full)
+            data = tuple(Reservation(r) for r in data_tuple)
+
             reservations = Reservations(
                 api=self,
                 data=data,
