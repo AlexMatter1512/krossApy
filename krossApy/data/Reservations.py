@@ -62,6 +62,16 @@ class Reservations:
         """
         return iter(self.data)
 
+    @property
+    def _plain_data(self):
+        """
+        Get the plain data of the reservations
+
+        Returns:
+            list: The plain data of the reservations
+        """
+        return [reservation.data for reservation in self.data]
+
     def page(self, page_number: int):
         """
         Move to a different page of reservations
@@ -94,7 +104,7 @@ class Reservations:
         """
         Return reservations data in JSON format
         """
-        return json.dumps(self.data, indent=2)
+        return json.dumps(self._plain_data, indent=2)
 
     def next(self):
         """
