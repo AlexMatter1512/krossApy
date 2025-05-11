@@ -10,10 +10,12 @@ class Reservation:
 
     def __getitem__(self, key):
         response_key = self._process_field_key(key)
+        if response_key is False:
+            raise KeyError(f"Key {key} not found in reservation data. Available keys: {list(self.data.keys())}")
         return self.data[response_key]
 
     def __setitem__(self, key, value):
-        response_key = self._process_field_key(key)
+        response_key = self._process_field_key(key) or key.RESPONSE
         self.data[response_key] = value
 
     def _process_field_key(self, key):
@@ -31,7 +33,7 @@ class Reservation:
                 return response_key
                 
         # If we get here, it was a Field but no matching keys were found
-        raise KeyError(f"Keys {key.RESPONSES} not found in reservation data. Available keys: {list(self.data.keys())}")
+        return False
 
     def to_dict(self):
         """Convert reservation to a dictionary."""
