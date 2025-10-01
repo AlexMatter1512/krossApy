@@ -134,6 +134,31 @@ class KrossAPI:
         except requests.RequestException as e:
             raise LoginError(f"Login request failed: {str(e)}") from e
 
+    def login_with_cookie(self, cookie: str) -> None:
+        """
+        Login using an existing session cookie.
+
+        Args:
+            cookie: The session cookie string
+
+        Raises:
+            ConfigurationError: If hotel_id isn't set
+        """
+        if not cookie or not isinstance(cookie, str):
+            raise ConfigurationError("Cookie must be a non-empty string")
+
+        self.session.cookies.set("kb_spsr", cookie)
+        # test if /login/v2 redirects to /dashboard
+        login_url = f"{self.base_url}{self.config.login_path}"
+        response = self.session.get(login_url, allow_redirects=False)
+        logger.debug("Response status code: %s", response.status_code)
+        if response.status_code not in (HTTPStatus.FOUND, HTTPStatus.MOVED_PERMANENTLY):
+            raise LoginError("Invalid cookie or session has expired")
+        self.logged_in = True
+        logger.debug(
+            "Logged in with cookie, current cookies: %s", self.session.cookies.get_dict()
+        )
+
     def _check_authentication(self) -> None:
         """Check if the client is authenticated."""
         if not self.logged_in:
