@@ -42,7 +42,7 @@ class KrossConfig:
         default_factory=lambda: {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "krossApy/0.2.0",
+            "User-Agent": "krossApy/0.2.1",
         }
     )
 

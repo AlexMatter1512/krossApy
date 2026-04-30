@@ -83,4 +83,4 @@ The client exposes the main endpoints identified in the reverse-engineered docum
 
 ## Source Documentation
 
-The endpoint mapping used for this refactor is captured in [KROSS_RESERVATION_API.md](KROSS_RESERVATION_API.md).
+The client surface is aligned to the reverse-engineered Kross mobile API, but the private research notes are intentionally not referenced from the published package documentation.

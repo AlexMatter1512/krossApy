@@ -2,10 +2,18 @@ from datetime import date, datetime
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from krossApy import ConfigurationError, KrossAPI, LoginError
+from krossApy import ConfigurationError, Fields, KrossAPI, LoginError, Reservations, build_filter
 
 
 class KrossAPITestCase(TestCase):
+    def test_legacy_top_level_imports_remain_available(self):
+        self.assertIsNotNone(Reservations)
+        self.assertEqual(Fields.ARRIVAL.FILTER, "arrival")
+        self.assertEqual(
+            build_filter(Fields.ARRIVAL, ">=", "2026-04-30"),
+            "zt4_cond[arrival]=mau&arrival=2026-04-30",
+        )
+
     def setUp(self) -> None:
         self.api = KrossAPI("hotel-id")
 

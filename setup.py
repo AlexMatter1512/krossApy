@@ -5,7 +5,7 @@ with open('README.md', 'r') as file:
 
 setup(
     name='krossApy',
-    version='0.2.0',
+    version='0.2.1',
     description='Unofficial Python client for the Kross Booking v5 mobile API',
     long_description=long_description,
     long_description_content_type='text/markdown',

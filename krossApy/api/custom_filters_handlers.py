@@ -1,4 +1,5 @@
-from ..data import Field, Reservations, Errors, Fields
+from ..data import Field, Fields, Reservations
+from ..data.Errors import UnsupportedFilterField
 from ..data.Filters import get_operator_string
 import logging
 
@@ -18,10 +19,9 @@ def build_filter(field: Field, condition: str, value: str) -> str:
     Returns:
         str: The filter string
     """
-    try:
-        actual_field = field.FILTER
-    except IndexError:
-        raise Errors.UnsupportedFilterField(field)
+    actual_field = field.FILTER
+    if not actual_field:
+        raise UnsupportedFilterField(field)
     
     operator = get_operator_string(condition)
     # actual value handling
