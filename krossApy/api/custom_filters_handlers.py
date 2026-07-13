@@ -1,4 +1,5 @@
-from ..data import Fields, Reservations, _Field_Idx, Errors
+from ..data import Field, Fields, Reservations
+from ..data.Errors import UnsupportedFilterField
 from ..data.Filters import get_operator_string
 import logging
 
@@ -6,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 BASE_FILTER = "zt4_cond[{}]={}&{}={}"
 
-def build_filter(field: Fields, condition: str, value: str) -> str:
+def build_filter(field: Field, condition: str, value: str) -> str:
     """
     Build a filter string for the API request
     
@@ -18,10 +19,9 @@ def build_filter(field: Fields, condition: str, value: str) -> str:
     Returns:
         str: The filter string
     """
-    try:
-        actual_field = field.value[_Field_Idx.FILTER]
-    except IndexError:
-        raise Errors.UnsupportedFilterField(field)
+    actual_field = field.FILTER
+    if not actual_field:
+        raise UnsupportedFilterField(field)
     
     operator = get_operator_string(condition)
     # actual value handling

@@ -1,3 +1,4 @@
+from typing import List
 from bs4 import BeautifulSoup
 import logging
 
@@ -5,7 +6,7 @@ import logging
 import csv
 
 logger = logging.getLogger(__name__)
-def getReservationsDict(response, simplified=False, csv=False) -> tuple[dict, int]:
+def getReservationsTuple(response, simplified=False, csv=False) -> tuple[dict, int]:
     """Get reservations data from HTML response.
     
     Args:
@@ -13,7 +14,7 @@ def getReservationsDict(response, simplified=False, csv=False) -> tuple[dict, in
         simplified (bool): If True, returns headers and data separately
             
     Returns:
-        dict: Either {"headers": [...], "data": [...]} or list of header-value dictionaries
+        tuple: Reservations data and total number of reservations
         
     Raises:
         ValueError: If reservations table is not found
@@ -22,21 +23,24 @@ def getReservationsDict(response, simplified=False, csv=False) -> tuple[dict, in
         return scrapeCsv(response)
     return scrapeHtml(response)
     
-def scrapeCsv(csv_response) -> tuple[dict, int]:
-    """Scrape CSV response for reservations data.
-    
-    Args:
-        csv: CSV response
-        
-    Returns:
-        dict: Reservations data
-    """
+def scrapeCsv(csv_response) -> tuple[list[dict], int]:
+    """Scrape CSV response for reservations data."""
     reader = csv.DictReader(csv_response.text.splitlines())
     headers = reader.fieldnames
-    
-    data = [{k: v.strip() for k, v in row.items()} for row in reader]
-    return data, len(data)
 
+    data = []
+    for row in reader:
+        cleaned_row = {}
+        for k, v in row.items():
+            if isinstance(v, list):
+                cleaned_row[k] = ', '.join(x.strip() for x in v if x)
+            elif isinstance(v, str):
+                cleaned_row[k] = v.strip()
+            else:
+                cleaned_row[k] = v
+        data.append(cleaned_row)
+
+    return data, len(data)
     
 def scrapeHtml(response) -> tuple[dict, int]:
     """Scrape HTML response for reservations data.

@@ -1,6 +1,3 @@
-from typing import List
-from . import Fields, _Field_Idx, Errors
-
 # Mapping of comparison operators to their string representations
 OPERATOR_MAP = {
     '<': 'mi',

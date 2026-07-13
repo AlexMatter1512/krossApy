@@ -1,9 +1,10 @@
-from typing import List
+from typing import List, Tuple
 import json
+from krossApy.data.Reservation import Reservation
 
 
 class Reservations:
-    data: dict  # reservations data
+    data: Tuple[Reservation, ...]  # list of reservations
     total: int  # total number of reservations matching the filters
     total_pages: int  # total number of pages
     current_page: int  # current page number
@@ -19,7 +20,7 @@ class Reservations:
     def __init__(
         self,
         api,
-        data: dict,
+        data: tuple,
         pages: int,
         current_page: int,
         total: int,
@@ -34,6 +35,42 @@ class Reservations:
         self._api = api
         self._applied_filters = filters
         self._fields = fields
+
+    def __getitem__(self, item):
+        """
+        Get a reservation by index
+
+        Args:
+            item (int): The index of the reservation to get
+
+        Returns:
+            dict: The reservation data
+        """
+        try:
+            return self.data[item]
+        except IndexError:
+            raise IndexError(f"Reservation at index {item} does not exist.")
+        except Exception as e:
+            raise ValueError(f"Failed to get reservation at index {item}: {str(e)}") from e
+
+    def __iter__(self):
+        """
+        Iterate over the reservations
+
+        Returns:
+            iterator: An iterator over the reservations
+        """
+        return iter(self.data)
+
+    @property
+    def _plain_data(self):
+        """
+        Get the plain data of the reservations
+
+        Returns:
+            list: The plain data of the reservations
+        """
+        return [reservation.data for reservation in self.data]
 
     def page(self, page_number: int):
         """
@@ -67,7 +104,7 @@ class Reservations:
         """
         Return reservations data in JSON format
         """
-        return json.dumps(self.data, indent=2)
+        return json.dumps(self._plain_data, indent=2)
 
     def next(self):
         """
@@ -103,6 +140,6 @@ class Reservations:
     @property
     def simple_data(self):
         # turn a [{key: value, key: value, ...}, ...] list into a {keys: [key, key, ...], values: [[value, value, ...], ...]} dict
-        headers = list(self.data[0].keys())
+        headers = list(self.data[0].data.keys())
         data = [[row[header] for header in headers] for row in self.data]
         return {"keys": headers, "values": data}

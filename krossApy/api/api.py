@@ -1,329 +1,365 @@
-from .custom_fields_handlers import CUSTOM_FIELDS_HANDLERS
-from .custom_types_handlers import retype_fields
+from __future__ import annotations
 
-from ..scraper import scraper
-from ..data import Fields, _Field_Idx, CustomFields
-from ..data.Reservations import Reservations
-from ..data.Errors import KrossAPIError, LoginError, ConfigurationError
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence
 
-from typing import Dict, List, Optional, Union, Any
 import requests
-import logging
-from dataclasses import dataclass
-from http import HTTPStatus
-import json
-import base64
 
-logger = logging.getLogger(__name__)
+from ..data.Errors import ConfigurationError, KrossAPIError, LoginError
 
-BASE_FIELDS = [
-    Fields.CODE,
-    Fields.LABEL,
-    Fields.NIGHTS,
-    Fields.ARRIVAL,
-    Fields.DEPARTURE,
-    Fields.N_ROOMS,
-    Fields.ROOMS,
-    Fields.N_BEDS,
-    Fields.DATE_RESERVATION,
-    Fields.LAST_UPDATE,
-    Fields.CHANNEL,
-    Fields.STATUS,
-    Fields.TELEPHONE,
-    Fields.GUEST_PORTAL_LINK,
-]
+
+DEFAULT_API_KEY = "apf6phf4eeb70da55fa972e3b7g403d4"
+DEFAULT_BASE_URL = "https://apiapp.krossbooking.com/v5"
+DEFAULT_TIMEOUT = 30
+DEFAULT_LANG = "en"
+DEFAULT_APP = "krossapp"
+DEFAULT_NOTIFICATION_TYPE = "FCM"
+VALID_DASHBOARD_TYPES = {"arrivals", "departures", "stays", "booked"}
+
+
+def _normalize_date(value: Any) -> str:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, str):
+        return value
+    raise TypeError("Date values must be str, date, or datetime")
+
 
 @dataclass
 class KrossConfig:
-    """Configuration for KrossAPI"""
+    """Configuration for the Kross v5 JSON API client."""
 
-    base_url_template: str = "https://{}.krossbooking.com"
-    login_path: str = "/login/v2"
-    reservations_path: str = "/v2/reservations?lang=en"
+    base_url: str = DEFAULT_BASE_URL
+    timeout: int = DEFAULT_TIMEOUT
+    lang: str = DEFAULT_LANG
+    api_key: str = DEFAULT_API_KEY
+    app: str = DEFAULT_APP
+    with_priv: bool = True
+    session_headers: MutableMapping[str, str] = field(
+        default_factory=lambda: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "krossApy/0.2.1",
+        }
+    )
 
 
 class KrossAPI:
+    """Client for the reverse-engineered Kross mobile API."""
+
     def __init__(
-        self, hotel_id: Optional[str] = None, config: Optional[KrossConfig] = None
-    ):
-        """
-        Initialize KrossAPI client.
-
-        Args:
-            hotel_id: The hotel identifier for the Krossbooking website
-            config: Optional configuration object
-        """
-        self.session = requests.Session()
+        self,
+        hotel_id: Optional[str] = None,
+        token: Optional[str] = None,
+        config: Optional[KrossConfig] = None,
+    ) -> None:
         self.config = config or KrossConfig()
-        self.logged_in = False
-        self._base_url: Optional[str] = None
-
-        if hotel_id:
-            self.set_hotel(hotel_id)
+        self.session = requests.Session()
+        self.session.headers.update(dict(self.config.session_headers))
+        self.hotel_id = hotel_id
+        self.token = token
 
     def set_hotel(self, hotel_id: str) -> None:
-        """
-        Set the hotel_id for the Krossbooking website.
-
-        Args:
-            hotel_id: The hotel identifier
-
-        Raises:
-            ConfigurationError: If hotel_id is empty or invalid
-        """
         if not hotel_id or not isinstance(hotel_id, str):
             raise ConfigurationError("Hotel ID must be a non-empty string")
-
-        self._base_url = self.config.base_url_template.format(hotel_id)
         self.hotel_id = hotel_id
-        # Reset login state when hotel changes
-        self.logged_in = False
+
+    def set_token(self, token: str) -> None:
+        if not token or not isinstance(token, str):
+            raise ConfigurationError("Token must be a non-empty string")
+        self.token = token
+
+    def clear_token(self) -> None:
+        self.token = None
 
     @property
-    def base_url(self) -> str:
-        """
-        Get the base URL for API requests.
+    def is_authenticated(self) -> bool:
+        return bool(self.token)
 
-        Raises:
-            ConfigurationError: If hotel_id hasn't been set
-        """
-        if not self._base_url:
-            raise ConfigurationError("Hotel ID must be set before making requests")
-        return self._base_url
+    def _make_url(self, path: str) -> str:
+        if not path.startswith("/"):
+            path = f"/{path}"
+        return f"{self.config.base_url}{path}"
 
-    def login(self, username: str, password: str) -> None:
-        """
-        Login to the Krossbooking website and store the session.
-
-        Args:
-            username: The username to login with
-            password: The password to login with
-
-        Raises:
-            LoginError: If login fails
-            ConfigurationError: If hotel_id isn't set
-        """
-        login_url = f"{self.base_url}{self.config.login_path}"
-
-        # Step 1: Initial request to receive login cookies
-        try:
-            self.session.get(login_url)
-            logger.debug(
-                "Initial cookies received: %s", self.session.cookies.get_dict()
-            )
-
-            # Step 2: Actual Login
-            payload = {"username": username, "password": password}
-            response = self.session.post(login_url, data=payload)
-            logger.debug("Login response: %s", response.text)
-
-            if response.status_code != HTTPStatus.OK:
-                raise LoginError(
-                    f"Login failed with status code: {response.status_code}"
-                )
-
-            if err := response.json().get("login_error"):
-                raise LoginError("Login failed: " + err)
-
-            self.logged_in = True
-            logger.debug(
-                "Login successful, cookies: %s", self.session.cookies.get_dict()
-            )
-
-        except requests.RequestException as e:
-            raise LoginError(f"Login request failed: {str(e)}") from e
-
-    def _check_authentication(self) -> None:
-        """Check if the client is authenticated."""
-        if not self.logged_in:
-            raise LoginError("You must login before making requests")
-        
-    def _direct_reservations_request(
-        self, zt4_data: Dict[str, Any], name: str = ""
-    ) -> requests.Response:
-        """
-        Make a direct request to get reservations data.
-
-        Args:
-            zt4_data: The data to send in the request
-
-        Returns:
-            Response from the server containing reservation data
-
-        Raises:
-            LoginError: If not logged in
-            requests.RequestException: If the request fails
-        """
-        self._check_authentication()
-        reservation_url = f"{self.base_url}{self.config.reservations_path}?"
-
-        json_str = json.dumps(zt4_data)
-
-        try:
-            data = {"zt4_data": json_str}
-            logger.debug(f"{name} Request data: {data}")
-
-            request = requests.Request("POST", reservation_url, data=data)
-            prepared_request = self.session.prepare_request(request)
-            logger.debug(f"{name} Direct Request Body: %s", prepared_request.body)
-
-            response = self.session.send(prepared_request)
-
-            response.raise_for_status()
-            return response
-
-        except requests.RequestException as e:
-            # logger.error("Failed to fetch reservations: %s", str(e))
-            logger.error(f"Failed to fetch reservations ({name}): {str(e)}")
-            raise
-
-    def _csv_reservations_request(self) -> requests.Response:
-        zt4b64_raw = json.dumps({"id": "reservations", "dwn": "csv"})
-        queryString = {'zt4b64': base64.b64encode(zt4b64_raw.encode()).decode()}
-        logger.debug(f"CSV Request data: {queryString}")
-        response = self.session.get(f"{self.base_url}{self.config.reservations_path}", params=queryString)
-        # logger.debug(f"CSV Response: {response.text}")
-        return response
-
-    def request_reservations(
-        # self, filters: Dict[str, Any] = None, columns: List[str] = ["cod_reservation"]
+    def _request(
         self,
-        filters: List[str] = None,
-        columns: List[str] = ["cod_reservation"],
-        page: int = None,
-        csv: bool = False,
-    ) -> requests.Response:
-        """
-        Make an authenticated request to get reservations data.
+        path: str,
+        body: Optional[Mapping[str, Any]] = None,
+        *,
+        token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        bearer_token = token or self.token
+        headers: Dict[str, str] = {}
+        if bearer_token:
+            headers["Authorization"] = f"Bearer {bearer_token}"
 
-        Args:
-            filters: The filters to apply to the request
-            columns: The columns to return in the response
+        try:
+            response = self.session.post(
+                self._make_url(path),
+                json=dict(body or {}),
+                headers=headers,
+                timeout=self.config.timeout,
+            )
+        except requests.RequestException as exc:
+            raise KrossAPIError(f"Request to {path} failed: {exc}") from exc
 
-        Returns:
-            Response from the server containing reservation data
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise KrossAPIError(
+                f"Invalid JSON response from {path}: status={response.status_code}"
+            ) from exc
 
-        Raises:
-            LoginError: If not logged in
-            requests.RequestException: If the request fails
-        """
+        if not response.ok:
+            error_message = payload.get("message") or payload.get("error") or payload
+            raise KrossAPIError(
+                f"Kross API request failed for {path}: status={response.status_code}, error={error_message}"
+            )
 
-        base_zt4_data = {
-            "id": "reservations",
-            "sort": ",arrival asc,",
-            "text": "",
-            "refresh_ajax": True,
+        return payload
+
+    def request(
+        self,
+        path: str,
+        body: Optional[Mapping[str, Any]] = None,
+        *,
+        token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self._request(path, body, token=token)
+
+    def login(
+        self,
+        username: str,
+        password: Optional[str] = None,
+        **extra_fields: Any,
+    ) -> Dict[str, Any]:
+        hotel_id = extra_fields.pop("hotel_id", self.hotel_id)
+        if not hotel_id:
+            raise ConfigurationError("Hotel ID must be set before logging in")
+        if not username:
+            raise ConfigurationError("Username must be a non-empty string")
+        if not password and not {"otp", "otp_gen_code", "id_otp"}.intersection(extra_fields):
+            raise ConfigurationError("Password is required unless completing an OTP flow")
+
+        body: Dict[str, Any] = {
+            "hotel_id": hotel_id,
+            "username": username,
+            "password": password,
+            "api_key": self.config.api_key,
+            "with_priv": self.config.with_priv,
+            "app": self.config.app,
         }
+        body.update({key: value for key, value in extra_fields.items() if value is not None})
+        body.setdefault("type", DEFAULT_NOTIFICATION_TYPE)
 
-        if "cod_reservation" in columns:
-            columns.remove("cod_reservation")
-        columns.insert(0, "cod_reservation")
+        payload = self._request("/auth/get-token", body)
+        auth_token = payload.get("auth_token")
+        if not auth_token:
+            raise LoginError("Login did not return auth_token")
 
-        # reset request to start from scratch
-        reset_zt4_data = base_zt4_data.copy() | {"reset": True}
-        self._direct_reservations_request(reset_zt4_data, "Reset")
+        self.hotel_id = hotel_id
+        self.token = auth_token
+        return payload
 
-        # remove base filters
-        remove_filters_zt4_data = base_zt4_data.copy() | {"filters_remove": 0}
-        self._direct_reservations_request(remove_filters_zt4_data, "Remove Filters")
+    def login_with_token(self, token: str) -> None:
+        self.set_token(token)
 
-        for filter in filters or []:
-            filter_zt4_data = base_zt4_data.copy() | {"filters": filter}
-            self._direct_reservations_request(filter_zt4_data, "Filter")
+    def get_properties(self, with_app_flags: bool = True) -> Dict[str, Any]:
+        payload = self._request("/properties/get-list", {"with_app_flags": with_app_flags})
+        return payload.get("data", {})
 
-        # actual request
-        zt4_data = (
-            base_zt4_data.copy()
-            | {"columns": columns}
-            # | ({"filters": filters} if filters else {})
+    def get_dashboard_totals(self, id_property: int, value_date: Any) -> Dict[str, Any]:
+        payload = self._request(
+            "/app/dashboard-totals",
+            {"id_property": id_property, "date": _normalize_date(value_date)},
+        )
+        return payload.get("data", {})
+
+    def get_dashboard_bucket(
+        self,
+        bucket_type: str,
+        id_property: int,
+        value_date: Any,
+        page: int = 0,
+    ) -> Dict[str, Any]:
+        if bucket_type not in VALID_DASHBOARD_TYPES:
+            raise ConfigurationError(
+                f"bucket_type must be one of {sorted(VALID_DASHBOARD_TYPES)}"
+            )
+        body = {
+            "type": bucket_type,
+            "page": page,
+            "id_property": id_property,
+            "date": _normalize_date(value_date),
+        }
+        return self._request(f"/app/dashboard-{bucket_type}?page={page}", body)
+
+    def search_reservations(self, **search_payload: Any) -> Dict[str, Any]:
+        return self._request("/app/search-reservation", search_payload)
+
+    def get_reservation(self, id_reservation: int, lang: Optional[str] = None) -> Dict[str, Any]:
+        payload = self._request(
+            "/app/get-reservation",
+            {"id_reservation": id_reservation, "lang": lang or self.config.lang},
+        )
+        return payload.get("data", {}).get("reservation", {})
+
+    def save_reservation(self, reservation_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        body = dict(reservation_payload)
+        for key in ("arrival", "departure", "date_expiration"):
+            if body.get(key) is not None:
+                body[key] = _normalize_date(body[key])
+        return self._request("/app/save-reservation", body)
+
+    def cancel_reservation(self, id_reservation: int, id_property: int) -> Dict[str, Any]:
+        return self._request(
+            "/app/cancel-reservation",
+            {"id_reservation": id_reservation, "id_property": id_property},
         )
 
-        response = self._direct_reservations_request(zt4_data)
+    def assign_operation(self, operation_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/assign-operation", dict(operation_payload))
 
-        # at this point, we have the first page of reservations with the desired columns and filters. 
-        # csv is the chosen method to get the full data and we can return the response since we don't care about pagination
-        if csv:
-            return self._csv_reservations_request()
+    def get_reservation_params(self, id_reservation: int, lang: Optional[str] = None) -> Dict[str, Any]:
+        payload = self._request(
+            "/app/get-params-for-reservation",
+            {"id_reservation": id_reservation, "lang": lang or self.config.lang},
+        )
+        return payload.get("data", {})
 
-        if page:
-            zt4_data_page = zt4_data.copy() | {"page": page - 1}
-            response = self._direct_reservations_request(zt4_data_page)
-
-        return response
-
-    def get_reservations(
+    def get_room_for_reservation_params(
         self,
-        filters: List[str] = None,
-        fields: List[Fields] = BASE_FIELDS,
-        page: int = 1,
-        full: bool = True,
-    ) -> Reservations:
-        """
-        Get reservations data with optional simplification.
+        id_property: int,
+        arrival: Any,
+        departure: Any,
+    ) -> Dict[str, Any]:
+        payload = self._request(
+            "/app/get-room-for-reservation-params",
+            {
+                "id_property": id_property,
+                "arrival": _normalize_date(arrival),
+                "departure": _normalize_date(departure),
+            },
+        )
+        return payload.get("data", {})
 
-        Args:
-            filters: The filters to apply to the request
-            columns: The columns to return in the response
-            simplified: If True, returns simplified format
+    def save_room_for_reservation(self, room_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        body = dict(room_payload)
+        for key in ("arrival_guest", "departure_guest"):
+            if body.get(key) is not None:
+                body[key] = _normalize_date(body[key])
+        return self._request("/app/save-room-for-reservation", body)
 
-        Returns:
-            Reservations data in dictionary or JSON format
+    def get_guests(self, id_reservation: int, lang: Optional[str] = None) -> Dict[str, Any]:
+        payload = self._request(
+            "/app/get-guests",
+            {"id_reservation": id_reservation, "lang": lang or self.config.lang},
+        )
+        return payload.get("data", {})
 
-        Raises:
-            KrossAPIError: If the request fails
-        """
-        # Split fields into custom and standard fields using set operations
-        field_set = set(fields)
-        logger.debug("Field set: %s", field_set)
+    def check_in(self, check_in_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/check-in", dict(check_in_payload))
 
-        custom_field_values = {field.value for field in CustomFields}
-        logger.debug("Custom field values: %s", custom_field_values)
+    def check_out(self, check_out_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/check-out", dict(check_out_payload))
 
-        custom_fields = field_set.intersection(custom_field_values)
-        logger.debug("Custom fields: %s", custom_fields)
+    def undo_check_in(self, undo_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/undo-check-in", dict(undo_payload))
 
-        standard_fields = field_set - custom_fields
+    def save_guest_data(self, guest_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/save-guest-data", dict(guest_payload))
 
-        # Map standard fields to their request values
-        request_fields = [field.value[_Field_Idx.REQUEST] for field in standard_fields]
+    def get_contracts_for_reservation(
+        self,
+        id_property: int,
+        id_reservation: int,
+        lang: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        payload = self._request(
+            "/app/get-contracts-for-reservation",
+            {
+                "id_property": id_property,
+                "id_reservation": id_reservation,
+                "lang": lang or self.config.lang,
+            },
+        )
+        return payload.get("data", {})
 
-        try:
-            response = self.request_reservations(filters, request_fields, page, csv=full)
-            data, total = scraper.getReservationsDict(response, csv=full)
-            reservations = Reservations(
-                api=self,
-                data=data,
-                pages=None,
-                current_page=None if full else page,
-                total=total,
-                filters=filters,
-                fields=fields,
-            )
-            if custom_fields:
-                logger.debug("Applying custom fields handlers")
-                for field in custom_fields:
-                    # get the handler for the custom field
-                    handler = CUSTOM_FIELDS_HANDLERS.get(field)
-                    logger.debug("Handler for %s: %s", field, handler)
-                    if handler:
-                        # apply the handler to the reservations
-                        reservations = handler(reservations)
+    def sign_contract(self, contract_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/sign-contract", dict(contract_payload))
 
-            reservations = retype_fields(reservations)
+    def preview_contract(
+        self,
+        id_template: int,
+        id_room_4_reservation_4_guest: int,
+        id_reservation: int,
+    ) -> Dict[str, Any]:
+        return self._request(
+            "/app/preview-contract",
+            {
+                "id_template": id_template,
+                "id_room_4_reservation_4_guest": id_room_4_reservation_4_guest,
+                "id_reservation": id_reservation,
+            },
+        )
 
-            return reservations
+    def get_checklists_for_reservation(self, id_reservation: int) -> Sequence[Dict[str, Any]]:
+        payload = self._request("/app/get-checklists-for-reservation", {"id_reservation": id_reservation})
+        return payload.get("data", [])
 
-        except Exception as e:
-            logger.error("Failed to get reservations: %s", str(e))
-            logger.debug("response: %s", response.text)
-            raise KrossAPIError(
-                f"Failed to get reservations (see debug log): {str(e)}"
-            ) from e
+    def get_checklist(self, id_checklist: int) -> Dict[str, Any]:
+        payload = self._request("/app/get-checklist", {"id_checklist": id_checklist})
+        return payload.get("data", {})
 
-    def __enter__(self):
-        """Support for context manager protocol"""
+    def save_answers(self, answers_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/save-answers", dict(answers_payload))
+
+    def save_custom_fields(self, custom_fields_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/save-custom-fields", dict(custom_fields_payload))
+
+    def get_charges_payments_docs(
+        self,
+        id_property: int,
+        id_reservation: int,
+        lang: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        payload = self._request(
+            "/app/get-charges-payments-docs",
+            {
+                "id_property": id_property,
+                "id_reservation": id_reservation,
+                "lang": lang or self.config.lang,
+            },
+        )
+        return payload.get("data", {})
+
+    def save_charge(self, charge_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/save-charge", dict(charge_payload))
+
+    def save_payment(self, payment_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/save-payment", dict(payment_payload))
+
+    def delete_charge(self, delete_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/delete-charge", dict(delete_payload))
+
+    def delete_payment(self, delete_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/app/delete-payment", dict(delete_payload))
+
+    def invalid_cc(self, invalid_cc_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/reservations/invalid-cc", dict(invalid_cc_payload))
+
+    def save_document(self, document_payload: Mapping[str, Any]) -> Dict[str, Any]:
+        return self._request("/documents/save", dict(document_payload))
+
+    def get_planner(self, id_property: int, planner_payload: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+        payload = self._request(f"/app/get-planner?id_property={id_property}", planner_payload or {})
+        return payload.get("data", {})
+
+    def __enter__(self) -> "KrossAPI":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Clean up resources when used as context manager"""
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         self.session.close()

@@ -1,4 +1,4 @@
-from ..data import Fields, Reservations, _Field_Idx
+from ..data import Fields, Reservations, Field
 import datetime
 import typing
 import logging
@@ -55,7 +55,7 @@ def retype_fields(reservations: Reservations) -> Reservations:
     """Retype fields in reservations"""
     for reservation in reservations.data:
         for field, field_type in FIELD_TYPES.items():
-            if (field_key := field.value[_Field_Idx.RESPONSE]) in reservation:
+            if (field_key := field.RESPONSE) in reservation.data:
                 handler = CUSTOM_TYPES_HANDLERS.get(field_type)
                 if handler:
                     reservation[field_key] = handler(reservation[field_key])
